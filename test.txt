@@ -1,1 +1,1 @@
-abcazdafcqdadcuabapd
+This is a longer test text designed to test the Huffman compression and decompression script. When text files are small, the metadata overhead makes the compressed file larger. However, when the file is long enough and contains repeating letters and common words, the actual compressed payload shrinks significantly, making the final output file smaller than the original text file! Let us test this out and see how it performs.
