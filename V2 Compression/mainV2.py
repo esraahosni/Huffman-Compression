@@ -4,7 +4,7 @@ from decompressV2 import decompress
 
 def main():
     mode = input("Choose mode - (c)ompress or (d)ecompress: ").strip().lower()
-    src = input("Input file [test.txt] <relative path for me only>: ").strip().strip('"') or "Data Comp\Huffman\test.txt"
+    src = input("Input file: ").strip().strip('"') 
 
     if mode == "c":
         dst = input("Output compressed file [out.txt]: ").strip() or "out.txt"
