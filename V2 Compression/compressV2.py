@@ -1,6 +1,6 @@
 from collections import Counter
 
-OTHERS = 256  # pseudo-symbol for all rare symbols
+OTHERS = 256  # symbol for all rare symbols
 
 
 def name(s):
@@ -13,7 +13,7 @@ def build_huffman(freqs):
         return {s: "0" for s in freqs}
 
     nodes = [(count, [s]) for s, count in freqs.items()]
-    nodes.sort(key=lambda x: x[0], reverse=True)      # smallest at the end
+    nodes.sort(key=lambda x: x[0], reverse=True)      # decending order
     codes = {s: "" for s in freqs}
 
     while len(nodes) > 1:
@@ -43,23 +43,23 @@ def compress(in_path, out_path, min_prob=0.05):
 
     counts = Counter(data)
 
-    # 1) rare symbols (probability < min_prob) -> Others
+    #  rare symbols --  probability < min_prob = Others
     rare = {s for s in counts if counts[s] / n < min_prob}
     if len(rare) < 2:                       # one rare symbol needs no escape
         rare = set()
 
-    # 2) rare table: fixed-width index for every rare symbol
+    #  rare table
     rare_list = sorted(rare)
     rare_width = (len(rare_list) - 1).bit_length() if rare_list else 0
     rare_code = {s: format(i, f"0{rare_width}b") for i, s in enumerate(rare_list)}
 
-    # 3) Huffman table for frequent symbols + Others
+    #  Huffman table for frequent symbols + Others
     freqs = {s: c for s, c in counts.items() if s not in rare}
     if rare:
         freqs[OTHERS] = sum(counts[s] for s in rare)
     codes = build_huffman(freqs)
 
-    # 4) encode everything into one long bit string
+    #  making the row data 101101010 
     parts = []
     for s in data:
         if s in rare:
@@ -68,14 +68,14 @@ def compress(in_path, out_path, min_prob=0.05):
             parts.append(codes[s])
     bits = "".join(parts)
 
-    # 5) pad to a multiple of 8
+    #  pad to a multiple of 8
     padding = (8 - len(bits) % 8) % 8
     bits += "0" * padding
 
-    # 6) every 8 bits -> one byte -> its decimal value (0..255)
+    #  every 8 bits -> one byte -> its decimal value (0..255)
     decimals = [int(bits[i:i + 8], 2) for i in range(0, len(bits), 8)]
 
-    # 7) write the file (plain text)
+    # write the file (plain text)
     with open(out_path, "w") as f:
         f.write(f"{n}\n{padding}\n")
         f.write(f"{len(codes)}\n")
@@ -86,7 +86,7 @@ def compress(in_path, out_path, min_prob=0.05):
             f.write(f"{s} {c}\n")
         f.write(" ".join(map(str, decimals)) + "\n")
 
-    # 8) report
+    #  report
     print("\nHuffman table:")
     print("  Symbol   Prob     Code")
     for s in sorted(codes, key=lambda x: (len(codes[x]), x)):
