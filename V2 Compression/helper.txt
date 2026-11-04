@@ -1,0 +1,9 @@
+156            <- original length
+7              <- padding bits
+13             <- number of Huffman table rows
+116 010        <- symbol (byte value) and its code, one per row
+...
+4              <- number of rare table rows
+100 00         <- rare symbol and its suffix
+...
+65 60 192 ...  <- the compressed data as decimals
