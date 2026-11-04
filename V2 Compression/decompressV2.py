@@ -1,4 +1,4 @@
-OTHERS = 256  # must match compress.py
+OTHERS = 256  
 
 
 def decompress(in_path, out_path):
