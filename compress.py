@@ -1,110 +1,94 @@
-import struct
-import sys
 from collections import Counter
-
-OTHERS = 256
-
-
+ 
+OTHERS = 256  
+ 
 def name(s):
     return "Others" if s == OTHERS else repr(chr(s))
-
-
-def build_codes(freqs, verbose=True):
-    if len(freqs) == 1:
-        return {next(iter(freqs)): "0"}
-
-    nodes = [(f, [s]) for s, f in sorted(freqs.items(), key=lambda x: (-x[1], x[0]))]
+ 
+ 
+def to_bits(number, width):
+    return format(number, f"0{width}b")       
+ 
+def build_huffman(freqs):
+    if len(freqs) == 1:                      
+        return {s: "0" for s in freqs}
+ 
+    nodes = [(count, [s]) for s, count in freqs.items()]
+    nodes.sort(reverse=True)
+    
     codes = {s: "" for s in freqs}
-    total = sum(freqs.values())
-    step = 0
-
+ 
     while len(nodes) > 1:
-        lower = nodes.pop()          
-        upper = nodes.pop()         
-        for s in upper[1]:
+        low = nodes.pop()                    
+        high = nodes.pop()                    
+        for s in high[1]:
             codes[s] = "0" + codes[s]
-        for s in lower[1]:
+        for s in low[1]:
             codes[s] = "1" + codes[s]
-        merged = (upper[0] + lower[0], upper[1] + lower[1])
-
-        i = 0
-        while i < len(nodes) and nodes[i][0] > merged[0]:
-            i += 1
-        nodes.insert(i, merged)
-
-        step += 1
-        if verbose:
-            def lab(n):
-                return "+".join(name(s) for s in n[1]) + f"={n[0]/total:.3f}"
-            print(f"  step {step}: merge [{lab(upper)}](0) + [{lab(lower)}](1)")
-            print("          list: " + ", ".join(lab(n) for n in nodes))
+ 
+        merged = (high[0] + low[0], high[1] + low[1])
+        pos = 0                               
+        while pos < len(nodes) and nodes[pos][0] > merged[0]:
+            pos += 1
+        nodes.insert(pos, merged)
     return codes
-
-
+ 
 def compress(in_path, out_path, min_prob):
     with open(in_path, "rb") as f:
         data = f.read()
     n = len(data)
-    counts = Counter(data)
-
+    counts = Counter(data)                    
+ 
     distinct = sorted(counts)
-    width = (len(distinct) - 1).bit_length() if distinct else 0
-    index = {s: i for i, s in enumerate(distinct)}
-
-    rare = {s for s, c in counts.items() if c / n <= min_prob} if n else set()
-    freqs = {s: c for s, c in counts.items() if s not in rare}
+    width = max(1, (len(distinct) - 1).bit_length())
+    original = {s: to_bits(i, width) for i, s in enumerate(distinct)}
+ 
+    rare = [s for s in counts if counts[s] / n <= min_prob]
+    freqs = {s: counts[s] for s in counts if s not in rare}
     if rare:
         freqs[OTHERS] = sum(counts[s] for s in rare)
-
-    print("Building Huffman tree:")
-    codes = build_codes(freqs) if freqs else {}
-
-    parts = []
-    for b in data:
-        if b in rare:
-            parts.append(codes[OTHERS])
-            if width:
-                parts.append(format(index[b], f"0{width}b"))
+ 
+    codes = build_huffman(freqs)
+ 
+    bits = ""
+    for s in data:
+        if s in rare:
+            bits += codes[OTHERS] + original[s]   
         else:
-            parts.append(codes[b])
-    bits = "".join(parts)
-    nbits = len(bits)
-    bits += "0" * ((-nbits) % 8)
-    payload = int(bits, 2).to_bytes(len(bits) // 8, "big") if bits else b""
-
-    header = struct.pack(">QH", n, len(codes))
-    for s, c in sorted(codes.items(), key=lambda x: (len(x[1]), x[1])):
-        header += struct.pack(">HB", s, len(c))
-        header += int(c, 2).to_bytes((len(c) + 7) // 8, "big")
-    header += struct.pack(">H", len(distinct)) + bytes(distinct)
-
+            bits += codes[s]
+ 
+    padding = (8 - len(bits) % 8) % 8
+    bits += "0" * padding
+ 
+    numbers = []
+    for i in range(0, len(bits), 8):
+        numbers.append(int(bits[i:i + 8], 2))
+    payload = bytes(numbers)
+ 
+    header = f"{n}\n{padding}\n{len(codes)}\n"
+    for s in codes:
+        header += f"{s} {codes[s]}\n"
+    header += f"{len(distinct)}\n"
+    header += " ".join(str(s) for s in distinct) + "\n"
+ 
     with open(out_path, "wb") as f:
-        f.write(header + payload)
+        f.write(header.encode("ascii"))
+        f.write(payload)
+ 
+    print("\nOriginal code table:")
+    print("  Symbol   Original Code")
+    for s in distinct:
+        print(f"  {name(s):8} {original[s]}")
+ 
+    print("\nHuffman code table:")
+    print("  Symbol   Code")
+    for s in sorted(codes):
+        print(f"  {name(s):8} {codes[s]}")
 
-    print("\nHuffman table:")
-    for s, c in sorted(codes.items(), key=lambda x: (len(x[1]), x[1])):
-        print(f"  {name(s):8} {c}")
-    if rare:
-        print(f"Original code length for 'Others' symbols: {width} bits")
-    print(f"\ncompressed data: {nbits} bits ({len(payload)} B) + header {len(header)} B")
-    print(f"original: {n} B, compressed file: {len(header) + len(payload)} B")
+    original_size = n
+    compressed_size = len(header) + len(payload)
 
-
-def main():
-    a = sys.argv[1:]
-    if len(a) >= 3:                                
-        compress(a[0], a[1], float(a[2]))
-    else:
-        src = input("input file: ").strip()
-        dst = input("output file [out.bin]: ").strip() or "out.bin"
-        while True:
-            try:
-                mp = float(input("minimum probability[0.05]: ").strip() or "0.05")
-                break
-            except ValueError:
-                print("Invalid input, please enter a number such as 0.05")
-        compress(src, dst, mp)
-
-
-if __name__ == "__main__":
-    main()
+    print(f"\nOriginal size   : {original_size} bytes")
+    print(f"Compressed size : {compressed_size} bytes")
+    print(f"Compressed data : {len(payload)} bytes (without header)")
+ 
